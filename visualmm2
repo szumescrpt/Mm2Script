@@ -1,49 +1,54 @@
--- ==============================
--- Beezelbub Hub | Rayfield UI
--- ==============================
+--==================================================
+-- Beezelbub Hub | Murder Mystery 2 (Rayfield UI)
+--==================================================
 
+--================ SERVICES ========================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TeleportService = game:GetService("TeleportService")
+
 local LocalPlayer = Players.LocalPlayer
 
--- ==============================
--- Load Rayfield
--- ==============================
+--================ RAYFIELD ========================
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Beezelbub Hub | Murder Mystery 2",
-   LoadingTitle = "Beezelbub Hub",
-   LoadingSubtitle = "by Beezelbub",
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "BeezelbubHub",
-      FileName = "MM2"
-   },
-   Discord = {
-      Enabled = true,
-      Invite = "UGrf8Keyx",
-      RememberJoins = true
-   },
-   KeySystem = false
+    Name = "Beezelbub Hub | Murder Mystery 2",
+    LoadingTitle = "Beezelbub Hub",
+    LoadingSubtitle = "Rayfield Edition",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "BeezelbubHub",
+        FileName = "MM2"
+    },
+    Discord = {
+        Enabled = true,
+        Invite = "UGrf8Keyx",
+        RememberJoins = true
+    },
+    KeySystem = false
 })
 
--- ==============================
--- STATE VARIABLES (UNCHANGED)
--- ==============================
+Rayfield:Notify({
+    Title = "Beezelbub Hub",
+    Content = "Rayfield UI Loaded Successfully",
+    Duration = 4
+})
+
+--================ VARIABLES =======================
 local highlightEnabled = true
-local espFilters = {"Esp All"}
 local coinAutofarmEnabled = false
 local candyAutofarmEnabled = false
 local autofarmSpeed = 25
 
--- ==============================
--- ESP LOGIC (UNCHANGED)
--- ==============================
-local function GetPlayerRole(player)
+local killAllEnabled = false
+local attackDelay = 0.5
+
+--================ ESP LOGIC =======================
+local function GetRole(player)
     local char = player.Character
     if not char then return end
     local backpack = player:FindFirstChild("Backpack")
@@ -57,122 +62,292 @@ local function GetPlayerRole(player)
     return "Innocent"
 end
 
-local function UpdateESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local role = GetPlayerRole(player)
-            local highlight = player.Character:FindFirstChild("RoleHighlight")
-
-            if highlightEnabled and role then
-                if not highlight then
-                    highlight = Instance.new("Highlight")
-                    highlight.Name = "RoleHighlight"
-                    highlight.FillTransparency = 0.5
-                    highlight.OutlineTransparency = 1
-                    highlight.Parent = player.Character
+RunService.RenderStepped:Connect(function()
+    if not highlightEnabled then return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local role = GetRole(plr)
+            local hl = plr.Character:FindFirstChild("RoleHighlight")
+            if not role then
+                if hl then hl:Destroy() end
+            else
+                if not hl then
+                    hl = Instance.new("Highlight")
+                    hl.Name = "RoleHighlight"
+                    hl.FillTransparency = 0.5
+                    hl.OutlineTransparency = 1
+                    hl.Parent = plr.Character
                 end
-
                 if role == "Murderer" then
-                    highlight.FillColor = Color3.fromRGB(255,0,0)
+                    hl.FillColor = Color3.fromRGB(255,0,0)
                 elseif role == "Sheriff" then
-                    highlight.FillColor = Color3.fromRGB(0,255,0)
+                    hl.FillColor = Color3.fromRGB(0,255,0)
                 else
-                    highlight.FillColor = Color3.fromRGB(255,255,255)
+                    hl.FillColor = Color3.fromRGB(255,255,255)
                 end
-            elseif highlight then
-                highlight:Destroy()
             end
+        end
+    end
+end)
+
+--================ ESP TAB =========================
+local ESPTab = Window:CreateTab("ESP", 4483362458)
+
+ESPTab:CreateToggle({
+    Name = "Highlight ESP",
+    CurrentValue = true,
+    Callback = function(v)
+        highlightEnabled = v
+    end
+})
+
+--================ AUTOFARM TAB ====================
+local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
+
+AutoFarmTab:CreateToggle({
+    Name = "Coin Autofarm",
+    CurrentValue = false,
+    Callback = function(v)
+        coinAutofarmEnabled = v
+    end
+})
+
+AutoFarmTab:CreateToggle({
+    Name = "Candy Autofarm",
+    CurrentValue = false,
+    Callback = function(v)
+        candyAutofarmEnabled = v
+    end
+})
+
+AutoFarmTab:CreateSlider({
+    Name = "Autofarm Speed",
+    Range = {5, 50},
+    Increment = 1,
+    CurrentValue = 25,
+    Callback = function(v)
+        autofarmSpeed = v
+    end
+})
+
+--================ CHARACTER TAB ===================
+local CharacterTab = Window:CreateTab("Character", 4483362458)
+
+CharacterTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {0, 200},
+    Increment = 1,
+    CurrentValue = 16,
+    Callback = function(v)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = v end
+    end
+})
+
+CharacterTab:CreateSlider({
+    Name = "JumpPower",
+    Range = {0, 200},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(v)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = v end
+    end
+})
+
+--================ TELEPORT TAB ====================
+local TeleportTab = Window:CreateTab("Teleport", 4483362458)
+local selectedPlayer
+
+local function PlayerNames()
+    local t = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(t, p.Name)
+        end
+    end
+    return t
+end
+
+TeleportTab:CreateDropdown({
+    Name = "Select Player",
+    Options = PlayerNames(),
+    Callback = function(opt)
+        selectedPlayer = Players:FindFirstChild(opt)
+    end
+})
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Player",
+    Callback = function()
+        if selectedPlayer and selectedPlayer.Character then
+            LocalPlayer.Character.HumanoidRootPart.CFrame =
+                selectedPlayer.Character.HumanoidRootPart.CFrame
+        end
+    end
+})
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Murderer",
+    Callback = function()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and GetRole(p) == "Murderer" then
+                LocalPlayer.Character.HumanoidRootPart.CFrame =
+                    p.Character.HumanoidRootPart.CFrame
+            end
+        end
+    end
+})
+
+--================ MURDERER TAB ====================
+local MurdererTab = Window:CreateTab("Murderer", 4483362458)
+
+local function HasKnife()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    if char:FindFirstChild("Knife") then return true end
+    local knife = LocalPlayer.Backpack:FindFirstChild("Knife")
+    if knife then knife.Parent = char return true end
+    return false
+end
+
+local function KillNearest()
+    if not HasKnife() then return end
+    local myRoot = LocalPlayer.Character.HumanoidRootPart
+    local closest, dist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+            if d < dist then
+                dist = d
+                closest = p
+            end
+        end
+    end
+    if closest then
+        myRoot.CFrame = closest.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,-2)
+        local knife = LocalPlayer.Character:FindFirstChild("Knife")
+        if knife and knife:FindFirstChild("Stab") then
+            knife.Stab:FireServer("Down")
         end
     end
 end
 
-RunService.RenderStepped:Connect(UpdateESP)
-
--- ==============================
--- ESP TAB
--- ==============================
-local ESPTab = Window:CreateTab("ESP", 4483362458)
-
-ESPTab:CreateToggle({
-   Name = "Highlight ESP",
-   CurrentValue = true,
-   Callback = function(Value)
-      highlightEnabled = Value
-   end,
+MurdererTab:CreateToggle({
+    Name = "Kill All",
+    CurrentValue = false,
+    Callback = function(v)
+        killAllEnabled = v
+        task.spawn(function()
+            while killAllEnabled do
+                KillNearest()
+                task.wait(attackDelay)
+            end
+        end)
+    end
 })
 
-ESPTab:CreateDropdown({
-   Name = "ESP Filter",
-   Options = {"All", "Murderer", "Sheriff"},
-   CurrentOption = "All",
-   Callback = function(Option)
-      espFilters = {"Esp "..Option}
-   end,
+MurdererTab:CreateSlider({
+    Name = "Attack Delay",
+    Range = {0.1, 2},
+    Increment = 0.1,
+    CurrentValue = 0.5,
+    Callback = function(v)
+        attackDelay = v
+    end
 })
 
--- ==============================
--- AUTOFARM TAB
--- ==============================
-local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
+--================ SHERIFF TAB =====================
+local SheriffTab = Window:CreateTab("Sheriff", 4483362458)
 
-AutoFarmTab:CreateToggle({
-   Name = "Coin Autofarm",
-   CurrentValue = false,
-   Callback = function(Value)
-      coinAutofarmEnabled = Value
-   end,
+SheriffTab:CreateButton({
+    Name = "Shoot Murderer",
+    Callback = function()
+        local data = ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+        for name, info in pairs(data) do
+            if info.Role == "Murderer" then
+                local p = Players:FindFirstChild(name)
+                if p and p.Character then
+                    local gun = LocalPlayer.Character:FindFirstChild("Gun")
+                    if gun then
+                        gun.KnifeLocal.CreateBeam.RemoteFunction:InvokeServer(
+                            1,
+                            p.Character.HumanoidRootPart.Position,
+                            "AH2"
+                        )
+                    end
+                end
+            end
+        end
+    end
 })
 
-AutoFarmTab:CreateToggle({
-   Name = "Candy Autofarm",
-   CurrentValue = false,
-   Callback = function(Value)
-      candyAutofarmEnabled = Value
-   end,
+--================ INNOCENT TAB ===================
+local InnocentTab = Window:CreateTab("Innocent", 4483362458)
+
+InnocentTab:CreateButton({
+    Name = "Grab Gun",
+    Callback = function()
+        for _, d in ipairs(workspace:GetDescendants()) do
+            if d.Name == "GunDrop" and d:IsA("BasePart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = d.CFrame
+                task.wait(0.2)
+                local p = d:FindFirstChildOfClass("ProximityPrompt")
+                if p then fireproximityprompt(p) end
+            end
+        end
+    end
 })
 
-AutoFarmTab:CreateSlider({
-   Name = "Autofarm Speed",
-   Range = {5, 50},
-   Increment = 1,
-   CurrentValue = 25,
-   Callback = function(Value)
-      autofarmSpeed = Value
-   end,
+--================ UTILITIES TAB ===================
+local UtilitiesTab = Window:CreateTab("Utilities", 4483362458)
+
+UtilitiesTab:CreateButton({
+    Name = "Enable Anti-AFK",
+    Callback = function()
+        loadstring(game:HttpGet(
+            "https://raw.githubusercontent.com/n9owns/Files/refs/heads/main/antiafk"
+        ))()
+    end
 })
 
--- ==============================
--- CHARACTER TAB
--- ==============================
-local CharacterTab = Window:CreateTab("Character", 4483362458)
-
-CharacterTab:CreateSlider({
-   Name = "WalkSpeed",
-   Range = {0, 200},
-   Increment = 1,
-   CurrentValue = 16,
-   Callback = function(Value)
-      local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-      if hum then hum.WalkSpeed = Value end
-   end,
+UtilitiesTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end
 })
 
-CharacterTab:CreateSlider({
-   Name = "JumpPower",
-   Range = {0, 200},
-   Increment = 1,
-   CurrentValue = 50,
-   Callback = function(Value)
-      local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-      if hum then hum.JumpPower = Value end
-   end,
+--================ SETTINGS TAB ====================
+local SettingsTab = Window:CreateTab("Settings", 4483362458)
+
+SettingsTab:CreateKeybind({
+    Name = "Toggle UI",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Callback = function()
+        Rayfield:ToggleUI()
+    end
 })
 
--- ==============================
--- NOTIFICATION TEST
--- ==============================
-Rayfield:Notify({
-   Title = "Beezelbub Hub",
-   Content = "Rayfield UI Loaded Successfully",
-   Duration = 4,
+SettingsTab:CreateButton({
+    Name = "Destroy UI",
+    Callback = function()
+        Rayfield:Destroy()
+    end
+})
+
+--================ INFO TAB ========================
+local InfoTab = Window:CreateTab("Info", 4483362458)
+
+InfoTab:CreateParagraph({
+    Title = "Beezelbub Hub",
+    Content = "Rayfield UI MM2 Hub\nNo loggers\nNo IP grabbers\nSafe & Clean"
+})
+
+InfoTab:CreateButton({
+    Name = "Copy Discord",
+    Callback = function()
+        setclipboard("https://discord.gg/UGrf8Keyx")
+    end
 })
