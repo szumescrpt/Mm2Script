@@ -121,7 +121,7 @@ local popupClosed = false
 
 WindUI:Popup({
 
-    Title = CreateGradientText("Kuni Hub", Colors.Red, Colors.Green),
+    Title = CreateGradientText("AZAZIL Hub", Colors.Red, Colors.Green),
 
     Icon = "skull",
 
@@ -149,7 +149,7 @@ WindUI:Popup({
 
             Callback = function()
 
-                setclipboard("https://discord.gg/rp62esPbCm")
+                setclipboard("https://discord.gg/C4Jnwuekh")
 
                 WindUI:Notify({
 
